@@ -328,30 +328,31 @@ sniff(iface=IFACE, prn=mitm, filter="tcp port 1883", store=0)
 - Iniciar ettercap `sudo ettercap -G`:
 
 
-<img width="943" height="555" alt="image" src="https://github.com/user-attachments/assets/9aedd907-57fe-4c3c-9370-cfd667223a9f" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/b7a66ce6-4492-411f-911c-1b879185304e" />
 
 
 - Mapeamos las IPs de la red:
-  
 
-<img width="928" height="544" alt="image" src="https://github.com/user-attachments/assets/7f448262-d11c-4eca-bfe3-918e933fc175" />
+  
+<img width="1365" height="764" alt="image" src="https://github.com/user-attachments/assets/22fe9420-9001-4323-a8d3-c81e4c6c2055" />
 
 
 - Mapeo de red (IPs y MACs):
   
 
-<img width="894" height="539" alt="image" src="https://github.com/user-attachments/assets/ac67c0ef-6d8d-40f0-93f5-18599bbda278" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/f0a3de6b-376d-4087-a9d8-2754f9a1d975" />
 
 
 - En el apartado `View` -> `Connections` podemos ver los paquetes que se envian:
 
 
-<img width="926" height="533" alt="image" src="https://github.com/user-attachments/assets/adba5ee3-a2fc-4b04-b9d2-8bdd6d74aa4c" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/220c8c8f-ef5c-49a2-8437-9acfe8ab4e6f" />
 
 
 - Activar el codigo y utilizar `mosquitto_sub` para poder ver como los paquetes le llegan al broker:
 
 
-<img width="1151" height="698" alt="image" src="https://github.com/user-attachments/assets/abdec175-30b5-45fd-8b54-d195a60a4cba" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/27f8d5d8-d798-409b-a526-50d6fd2eefeb" />
 
 
+---
