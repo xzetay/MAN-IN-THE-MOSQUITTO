@@ -268,9 +268,9 @@ sniff(iface=IFACE, prn=mitm, filter="tcp port 1883", store=0)  # Captura y proce
 2. El script le miente al sensor diciendo:
 “Ey, yo soy tu ordenador, mándame los datos a mí”.
 4. Cuando el sensor envía la temperatura real (por ejemplo 30 °C), el script la intercepta antes de que llegue al ordenador.
-5. El script cambia ese número por uno más alto (la sube de a poquito cada vez: 35 → 42 → 59 → 78 → 92 °C).
+5. El script cambia ese número por uno más alto (la sube de a poco cada vez: 35 → 42 → 59 → 78 → 92 °C).
 6. Le entrega al ordenador SOLO la temperatura falsa (el ordenador nunca ve la verdadera).
-7. En pantalla vas viendo en vivo cómo la temperatura “sube sola” hasta llegar a 92 °C y se pone en rojo diciendo “¡umbral crítico alcanzado!”.
+7. En pantalla se vera cómo la temperatura “sube sola” hasta llegar a 92 °C.
 
 
 ---
