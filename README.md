@@ -220,11 +220,11 @@ sniff(iface=IFACE, prn=mitm, filter="tcp port 1883", store=0)
 ## Metodologia del ataque:
 
 1. Fase de reconocimiento y mapeo de la red:
-  - Herramientas: `ettercap`, este realizara:
-    - Envío masivo de ARP who-has a todas las direcciones de la subred 10.235.248.0/24
-    - Envío paralelo de ICMP echo-request (ping sweep) para forzar respuestas ARP adicionales
-    - Escucha pasiva de tráfico ARP broadcast existente
-    - Construcción automática de tabla IP ↔ MAC ↔ Fabricante
+	- Herramientas: `ettercap`, este realizara:
+    	- Envío masivo de ARP who-has a todas las direcciones de la subred 10.235.248.0/24
+    	- Envío paralelo de ICMP echo-request (ping sweep) para forzar respuestas ARP adicionales
+    	- Escucha pasiva de tráfico ARP broadcast existente
+    	- Construcción automática de tabla IP ↔ MAC ↔ Fabricante
 
 2. Fase de envenenamiento ARP dirigido (ARP Spoofing):
    - Se engaña al ESP32 haciendole pensar que la IP del broker MQTT ahora tiene nuestra MAC de atacante, y se podran ver los paquetes ya que son redireccionados.
