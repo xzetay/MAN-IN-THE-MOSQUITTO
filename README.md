@@ -47,6 +47,16 @@ Este es un laboratorio práctico de ciberseguridad industrial cuyo objetivo prin
 @%%%%#%%%%%%%#%#****#####*#######*##*#*****+==+@++=++*@=@%+*-@@*@@@@@@@@@@@@@@@@@@@@@-@@-=@@%#-=+*====++++*+*********####%@%%%%#%%%%%%%#%#****#####*##
 ```
 
+## Conceptos generales:
+
+MQTT es un protocolo de mensajería ligero y basado en el patrón de publicación/suscripción diseñado para la comunicación máquina a máquina (M2M) en el Internet de las cosas (IoT).
+
+Su comunicacion es sencilla:
+
+1. El ESP32 se conecta al broker diciendole: `Me suscribo al topico X y voy a publicar en el topico planta/reactor1/temperatura`.
+2. Cada que se mide la temperatura, publica (PUBLISH) un mensaje con el valor de la temperatura: `{"temp": 36.8, "tag": "PT100-TX1", "unit": "C"}`
+3. El broker recibe el mensaje y reenvia a todos los que esten suscriptos a ese topico.
+
 ---
 
 ## Diagrama a alto nivel:
@@ -68,7 +78,76 @@ Este es un laboratorio práctico de ciberseguridad industrial cuyo objetivo prin
 - Ettercap: `sudo apt install -y ettercap-common ettercap-graphical`, MITM clásico con interfaz gráfica y textual.
 - Libreria en Scapy: `pip3 install scapy`, imprescindible para el script Python del ataque MITM.
 
-## Creacion del codigo en:
+## Codigo para el ESP32:
+
+```
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+// ===========================================================
+// SENSOR INDUSTRIAL DE TEMPERATURA - MOD. PT100-TX1
+// ===========================================================
+const char* ssid = "XXXXXXX"; 
+const char* password = "XXXXXXXXXX";
+const char* mqtt_server = "XX.XX.XX.XX"; // Broker central de planta
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup_wifi() {
+	Serial.println(F("\nPT100-TX1 | Iniciando Wi-Fi industrial"));
+	WiFi.begin(ssid, password);
+	while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+	Serial.print(F("\nConectado | IP: "));
+	Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+	while (!client.connected()) {
+	Serial.print(F("Conectando al broker MQTT... "));
+	if (client.connect("PT100-TX1-LAB")) {
+	Serial.println(F("OK"));
+	} else {
+	Serial.print(F("fallo rc=")); Serial.println(client.state());
+	delay(3000);
+		}
+	}
+}
+
+void setup() {
+	Serial.begin(115200);
+	delay(1000);
+	Serial.println(F("\n========================================"));
+	Serial.println(F(" SENSOR PT100-TX1 - PRODUCCIÓN "));
+	Serial.println(F(" Temperatura de proceso crítica "));
+	Serial.println(F(" Firmware v2.3.1 | 2025 "));
+	Serial.println(F(" (c) Industria Química del Sur "));
+	Serial.println(F("========================================"));
+	setup_wifi();
+	client.setServer(mqtt_server, 1883);
+}
+
+void loop() {
+	if (!client.connected()) reconnect();
+	client.loop();
+	
+	static uint32_t last = 0;
+	if (millis() - last > 4000) {
+		last = millis();
+		float temp = random(220, 402) / 10.0; // 22.0 a 40.1 °C
+		
+	String payload = "{\"temp\":" + String(temp, 1) + ",\"tag\":\"PT100-TX1\",\"unit\":\"C\"}";
+	
+	client.publish("planta/reactor1/temperatura", payload.c_str());
+	
+	Serial.print(F("Enviado → "));
+	Serial.print(temp, 1);
+	Serial.println(F(" °C"));
+	}
+}
+```
+
+## Codigo en Python:
 
 ```
 #!/usr/bin/env python3
